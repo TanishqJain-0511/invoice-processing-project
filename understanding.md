@@ -202,34 +202,62 @@ invoice-processing-project/
 │   ├── run_pipeline.py         CLI: python run_pipeline.py <pdf>
 │   ├── pipeline/
 │   │   ├── models.py           All data structures (InvoiceExtraction, Flag, DecisionOutput)
-│   │   ├── state.py            The shared state dict that flows through all four stages
+│   │   ├── state.py            Shared state dict + flag_rules field for custom escalation
 │   │   ├── graph.py            LangGraph wiring — connects the four nodes
 │   │   ├── nodes/
 │   │   │   ├── extraction.py   Stage 1
 │   │   │   ├── validation.py   Stage 2
 │   │   │   ├── matching.py     Stage 3 (all four sub-checks)
-│   │   │   └── decision.py     Stage 4
+│   │   │   └── decision.py     Stage 4 + custom flag_rules escalation logic
 │   │   └── utils/
 │   │       ├── tolerance.py    Pure math functions for the tiered tolerance table
 │   │       └── pdf_parser.py   PDF text extraction + OCR detection check
 │   ├── api/
 │   │   ├── main.py             FastAPI app: POST /api/process, GET /api/runs, GET /api/runs/{id}
-│   │   ├── db.py               Supabase client singleton
-│   │   └── schemas.py          Pydantic request/response models
+│   │   ├── db.py               Supabase client singleton (graceful fallback if unavailable)
+│   │   └── schemas.py          Pydantic models — RunSummary includes flag_categories + flags_raised
 │   ├── test_data/              5 test PDFs + 3 reference JSONs
 │   └── tests/
-│       └── test_pipeline.py    24 integration tests (still pass, load from local JSON)
-├── frontend/                   ← Next.js 16 app (TypeScript + Tailwind + shadcn/ui)
+│       └── test_pipeline.py    24 integration tests (load from local JSON, always pass)
+├── frontend/                   ← Next.js 16 (App Router, TypeScript, Tailwind, shadcn/ui)
 │   └── src/
+│       ├── lib/
+│       │   ├── api.ts          Typed fetch client (getRun, getRuns, processInvoice)
+│       │   └── auth.ts         localStorage mock auth (any credentials work in demo mode)
 │       ├── app/
-│       │   ├── page.tsx        Upload page: drag & drop + live stage animation
-│       │   └── runs/[id]/
-│       │       └── page.tsx    Run detail: decision banner, flags, stages, extracted data
-│       ├── components/
-│       │   ├── StageCard.tsx   Stage card (pending/running/done states)
-│       │   └── DecisionBadge.tsx  Colored approve/flag/reject badge
-│       └── lib/
-│           └── api.ts          Typed fetch client for the FastAPI backend
+│       │   ├── globals.css     Tailwind base + custom keyframes (scan, fade-in, slide-up, log-in)
+│       │   ├── layout.tsx      Root layout: fonts + AuthLayoutWrapper
+│       │   ├── page.tsx        Root redirect → /dashboard or /login
+│       │   ├── login/          Standalone login page (no sidebar)
+│       │   ├── dashboard/      Operational overview: metrics, quick actions, recent activity
+│       │   ├── upload/         Upload + processing experience (pipeline timeline + PDF preview)
+│       │   ├── runs/
+│       │   │   ├── page.tsx    History: search, decision/category/subcategory filters, table
+│       │   │   ├── loading.tsx Skeleton loader for history page
+│       │   │   └── [id]/
+│       │   │       ├── page.tsx      Run detail: decision hero, flags, reasoning timeline, dev mode
+│       │   │       └── loading.tsx   Skeleton loader for run detail
+│       │   ├── config/         Settings: business rule toggles + reference data uploads
+│       │   ├── admin/          Org settings: company name/address/logo → Sidebar branding
+│       │   ├── help/           Pipeline explainer, business rules, FAQ, keyboard shortcuts
+│       │   └── not-found.tsx   Styled 404 page
+│       └── components/
+│           ├── layout/
+│           │   ├── AuthLayoutWrapper.tsx  Client component: checks auth, shows login or shell
+│           │   ├── Sidebar.tsx            240px sticky nav with grouped sections + user area
+│           │   ├── TopNav.tsx             48px top bar: breadcrumbs + search (⌘K) + notifications
+│           │   └── PageHeader.tsx         Consistent page title/description/action header
+│           ├── shared/
+│           │   ├── DecisionBadge.tsx      approve/flag/reject badge with lucide icons
+│           │   ├── MetricCard.tsx         Big-number card with color variants
+│           │   ├── SectionCard.tsx        White card with optional header + action
+│           │   ├── ConfidenceBar.tsx      Visual bar: high=emerald, medium=amber, low=gray
+│           │   ├── EmptyState.tsx         Icon + title + description + action
+│           │   ├── LoadingSkeleton.tsx    MetricCardSkeleton, TableRowSkeleton, RunDetailSkeleton
+│           │   ├── NotificationDropdown.tsx  Bell dropdown with demo notifications
+│           │   └── CommandPalette.tsx     ⌘K modal: search runs + navigate pages
+│           └── runs/
+│               └── DownloadActions.tsx   'use client' — Download JSON + Copy Summary buttons
 └── db/
     ├── schema.sql              CREATE TABLE for 4 Supabase tables
     └── seed.sql                INSERT for POs, vendors, invoice history
@@ -267,6 +295,11 @@ cd frontend && npm run dev
 # → http://localhost:3000
 ```
 
+**Live deployed URLs:**
+- Frontend: https://invoice-processing-project.vercel.app
+- Backend:  https://invoice-processing-project-production.up.railway.app
+- API docs: https://invoice-processing-project-production.up.railway.app/docs
+
 **Test the API directly:**
 ```bash
 curl -F "file=@backend/test_data/invoice_1_happy_path_INV-3001.pdf" \
@@ -278,15 +311,16 @@ curl -F "file=@backend/test_data/invoice_1_happy_path_INV-3001.pdf" \
 
 ## Build Progress
 
-| Step    | What                                 | Status  |
-|---------|--------------------------------------|---------|
-| Step 1  | LangGraph pipeline, 24/24 tests      | ✅ Done  |
-| Step 2  | FastAPI backend + Supabase           | ✅ Done  |
-| Step 3  | Next.js upload page + live run view  | ✅ Done  |
-| Step 4  | Dashboard / history view             | ✅ Done  |
-| Step 5  | Polish                               | ✅ Done  |
-| Step 6  | Deploy (Vercel + Railway)            | ✅ Done  |
-| Step 7  | Demo recording                       | ⏳ Final |
+| Step   | What                                          | Status     |
+|--------|-----------------------------------------------|------------|
+| Step 1 | LangGraph pipeline, 24/24 tests               | ✅ Done    |
+| Step 2 | FastAPI backend + Supabase                    | ✅ Done    |
+| Step 3 | Next.js upload page + live run view           | ✅ Done    |
+| Step 4 | Dashboard / history view                      | ✅ Done    |
+| Step 5 | Polish                                        | ✅ Done    |
+| Step 6 | Deploy (Vercel + Railway)                     | ✅ Done    |
+| Step 7 | Full UI overhaul (enterprise design system)   | ✅ Done    |
+| Step 8 | Demo recording                                | ⏳ Next    |
 
 ## Step 2 — What Was Built (FastAPI + Supabase)
 
@@ -309,7 +343,7 @@ persisted in `pipeline_runs.invoice_file_path`.
 
 ## Step 3 — What Was Built (Next.js Frontend)
 
-Two pages:
+Two pages (initial version, later overhauled in Step 7):
 
 **`/` (Upload page)**
 - Drag-and-drop or click-to-browse PDF upload
@@ -327,12 +361,11 @@ Two pages:
 
 ## Step 4 — What Was Built (Dashboard / History View)
 
-**`/runs` (Dashboard)**
+**`/runs` (History)**
 - Stats row: total runs · approved count · flagged count · rejected count
 - Table of all past runs, newest first: filename, decision badge, matched PO,
   confidence, date + time — each row links to `/runs/{id}`
 - Empty state with link to upload when no runs exist
-- Shared navigation header added to root layout (Upload · History links on every page)
 - Bug fix: `invoice_history.processed_date` now uses `ref_date` (not real today) so
   duplicate detection stays consistent with test reference date; duplicates no longer
   added to history a second time
@@ -341,11 +374,10 @@ Two pages:
 
 ## Step 5 — What Was Built (Polish)
 
-- **NavBar** (`components/NavBar.tsx`) — `'use client'`, `usePathname()` for active link detection (Upload / History), sticky top nav on every page
-- **RunsTable** (`components/RunsTable.tsx`) — `'use client'`, full-row click via `useRouter` navigates to `/runs/{id}`
+- **NavBar** — `'use client'`, `usePathname()` for active link detection, sticky top nav on every page
+- **RunsTable** — `'use client'`, full-row click via `useRouter` navigates to `/runs/{id}`
 - **Loading skeletons** — `runs/loading.tsx` and `runs/[id]/loading.tsx` — animated pulse layouts that display while server components fetch data
 - **Not-found page** — `app/not-found.tsx` — styled 404 with link back to history
-- Upload page trimmed: removed redundant h1, adjusted min-height
 
 ---
 
@@ -387,6 +419,61 @@ Two pages:
 3. Add environment variable: `NEXT_PUBLIC_API_URL` = your Railway backend URL
 4. Click **Deploy**
 5. Copy the Vercel URL, go back to Railway and set `CORS_ORIGINS` to the Vercel URL, then redeploy
+
+---
+
+## Step 7 — What Was Built (UI Overhaul)
+
+The frontend was fully redesigned to production quality — Vercel/Linear/Stripe style.
+Zero new libraries; same stack (Next.js 16, Tailwind, shadcn/ui, lucide-react).
+
+### New pages
+
+| Route | What it is |
+|---|---|
+| `/login` | Standalone login page. Mock auth: any credentials work. Stores user in `localStorage`. |
+| `/dashboard` | Operational overview. Greeting, 4 metric cards, amber alert if flagged runs exist, recent activity feed, quick actions. |
+| `/upload` | Upload zone + full processing experience. After submit, shows pipeline timeline, live log stream, and a PDF preview panel side-by-side — no page redirect mid-process. |
+| `/runs` | History table. Search by filename, filter by decision/flag category/subcategory. Active filter chips. "⚠ Re-process" chip on runs whose rules have since changed. |
+| `/runs/[id]` | Decision detail. 2-column sticky layout: left = decision hero + flags summary; right = executive summary paragraph, reasoning timeline per stage, line items table, pipeline stage cards, developer mode (raw JSON + model info), export actions. |
+| `/config` | Business rules tab: toggle any flag subcategory from FLAG → REJECT. Reference data tab: upload custom PO dataset / vendor list / invoice history JSON. All stored in `localStorage` and sent to the API on next upload. |
+| `/admin` | Organization tab: company name, address, email, logo URL — updates the Sidebar brand live. Workspace tab: pipeline version info, current session, security/logout. |
+| `/help` | Pipeline stage explainer, business rules table with severity, tolerance formula table, FAQ, keyboard shortcuts, tech stack grid. |
+
+### Shell components
+
+- **Sidebar** (240px, sticky left) — brand logo, grouped nav (Workspace / Configure), user section with sign-out
+- **TopNav** (48px, sticky top) — auto-breadcrumbs from pathname, search trigger, notification bell with amber dot
+- **AuthLayoutWrapper** — client component that checks `localStorage` auth on mount; public paths (`/login`) get no shell; all others redirect to `/login` if unauthenticated
+- **CommandPalette** — opens with `⌘K`, fetches runs from API, filters by query, includes page navigation shortcuts
+
+### Design system components
+
+| Component | Purpose |
+|---|---|
+| `DecisionBadge` | approve (emerald + CheckCircle), flag (amber + AlertTriangle), reject (red + XCircle). Three sizes. |
+| `MetricCard` | Big-number stat card with color variants and subtle hover lift |
+| `SectionCard` | White card with optional titled header and action slot |
+| `ConfidenceBar` | Visual bar — high=full/emerald, medium=2/3/amber, low=1/3/gray |
+| `EmptyState` | Icon + title + description + primary or ghost action button |
+| `LoadingSkeleton` | `MetricCardSkeleton`, `TableRowSkeleton`, `RunDetailSkeleton` — replaces all spinners |
+| `NotificationDropdown` | Bell dropdown with demo notifications, closes on outside click |
+
+### Config / stateless mode
+
+The app works without Supabase. Everything is overridable via `localStorage`:
+
+| Key | Overrides |
+|---|---|
+| `invoiceProcessor:poDataset` | Custom PO JSON uploaded in /config |
+| `invoiceProcessor:vendorList` | Custom vendor list JSON |
+| `invoiceProcessor:invoiceHistory` | Custom invoice history JSON |
+| `invoiceProcessor:flagRules` | Per-subcategory FLAG → REJECT escalation toggles |
+| `invoiceProcessor:companyInfo` | Org name/address/email/logo from /admin |
+| `invoiceProcessor:auth` | Logged-in user (name + email) |
+
+On submit from `/upload`, all localStorage data is appended to the FormData. The backend
+accepts these as optional form fields and uses them instead of Supabase if provided.
 
 ---
 

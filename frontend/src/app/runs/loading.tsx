@@ -1,53 +1,46 @@
-export default function Loading() {
+import { MetricCardSkeleton, TableRowSkeleton } from "@/components/shared/LoadingSkeleton";
+
+export default function RunsLoading() {
   return (
-    <main className="min-h-screen py-8 px-6 animate-pulse">
-      <div className="max-w-2xl mx-auto space-y-5">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="h-5 w-36 bg-slate-200 rounded" />
-          <div className="h-8 w-24 bg-slate-200 rounded-lg" />
+    <div className="p-6 max-w-6xl mx-auto space-y-5">
+      {/* Header skeleton */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="h-6 w-40 bg-gray-100 rounded animate-pulse mb-1.5" />
+          <div className="h-4 w-64 bg-gray-100 rounded animate-pulse" />
         </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-3">
-          {[...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              className="bg-white rounded-xl border border-slate-200 px-4 py-3"
-            >
-              <div className="h-6 w-8 bg-slate-200 rounded mb-1.5" />
-              <div className="h-3 w-14 bg-slate-100 rounded" />
-            </div>
-          ))}
-        </div>
-
-        {/* Table skeleton */}
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 flex gap-4">
-            {[180, 60, 80, 60, 80].map((w, i) => (
-              <div key={i} className={`h-3 bg-slate-100 rounded`} style={{ width: w }} />
-            ))}
-          </div>
-          {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className="px-5 py-4 border-b border-slate-50 flex items-center gap-6"
-            >
-              <div className="flex-1 space-y-1.5">
-                <div className="h-4 w-48 bg-slate-200 rounded" />
-                <div className="h-3 w-12 bg-slate-100 rounded" />
-              </div>
-              <div className="h-5 w-16 bg-slate-200 rounded-full" />
-              <div className="h-4 w-14 bg-slate-100 rounded hidden sm:block" />
-              <div className="h-4 w-10 bg-slate-100 rounded hidden sm:block" />
-              <div className="ml-auto space-y-1.5 text-right">
-                <div className="h-4 w-24 bg-slate-200 rounded" />
-                <div className="h-3 w-16 bg-slate-100 rounded" />
-              </div>
-            </div>
-          ))}
-        </div>
+        <div className="h-9 w-36 bg-gray-100 rounded-md animate-pulse" />
       </div>
-    </main>
+
+      {/* Metrics skeleton */}
+      <div className="grid grid-cols-5 gap-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <MetricCardSkeleton key={i} />
+        ))}
+      </div>
+
+      {/* Table skeleton */}
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              {["Invoice", "Decision", "Matched PO", "Confidence", "Processed"].map((h) => (
+                <th
+                  key={h}
+                  className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <TableRowSkeleton key={i} cols={5} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

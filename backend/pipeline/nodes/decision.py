@@ -52,11 +52,20 @@ def decision_node(state: PipelineState) -> dict:
 
     new_reasoning: list[str] = []
 
+    flag_rules: dict = state.get("flag_rules", {})
+
     # ── Determine decision ────────────────────────────────────────────────────
 
     has_reject_trigger = any(
         f.get("subcategory") == _REJECT_SUBCATEGORY for f in all_flags
     )
+
+    # User-configured rejects: any flag whose subcategory is toggled to "reject" in the UI
+    custom_reject_flags = [
+        f for f in all_flags
+        if flag_rules.get(f.get("subcategory")) == "reject"
+        and f.get("subcategory") != _REJECT_SUBCATEGORY  # don't double-count
+    ]
 
     if has_reject_trigger:
         decision = "reject"
@@ -64,6 +73,14 @@ def decision_node(state: PipelineState) -> dict:
             "Stage 4 (Decision): REJECT — "
             "'Unexplained Overage — Beyond 3× Tolerance (Reject Trigger)' flag found. "
             "This is the only path that produces a reject. See flags_raised for detail."
+        )
+
+    elif custom_reject_flags:
+        decision = "reject"
+        escalated = "; ".join(f["subcategory"] for f in custom_reject_flags)
+        new_reasoning.append(
+            f"Stage 4 (Decision): REJECT — business rules configured to reject on: [{escalated}]. "
+            "See flags_raised for detail."
         )
 
     elif all_flags:

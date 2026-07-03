@@ -31,6 +31,8 @@ class RunSummary(BaseModel):
     extraction_confidence: str | None
     matched_po: str | None
     flags_count: int
+    flag_categories: list[str]   # unique categories present in flags_raised
+    flags_raised: list[dict[str, Any]]  # full flag objects for stale-rule detection
 
 
 class RunDetail(BaseModel):

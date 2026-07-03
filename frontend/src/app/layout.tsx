@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import NavBar from "@/components/NavBar";
+import AuthLayoutWrapper from "@/components/layout/AuthLayoutWrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,20 +14,21 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Invoice Processor",
-  description: "AI-powered AP automation — approve, flag, or reject invoices with a full reasoning trail.",
+  title: "InvoiceIQ — AI Invoice Processing",
+  description:
+    "AI-powered AP automation — approve, flag, or reject invoices with a full reasoning trail.",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full bg-slate-50">
-        <NavBar />
-        {children}
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
+      <body className="h-full">
+        <AuthLayoutWrapper>{children}</AuthLayoutWrapper>
       </body>
     </html>
   );

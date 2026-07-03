@@ -47,6 +47,8 @@ export interface RunSummary {
   extraction_confidence: "high" | "medium" | "low" | null;
   matched_po: string | null;
   flags_count: number;
+  flag_categories: string[];
+  flags_raised: Flag[];
 }
 
 export async function getRun(id: string): Promise<RunDetail> {
