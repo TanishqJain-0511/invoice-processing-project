@@ -193,6 +193,7 @@ pytest tests/ -v
 python run_pipeline.py test_data/invoice_1_happy_path_INV-3001.pdf
 ```
 
+
 **Required env vars** (in `.env`):
 ```
 OPENAI_API_KEY=sk-proj-...
@@ -208,3 +209,20 @@ REFERENCE_DATE=2026-06-25
 - FastAPI backend, Supabase, Next.js frontend (Steps 2–4)
 - PDF generation script (`scripts/generate_invoices.py`)
 - Per-field extraction confidence (currently overall only)
+
+
+
+InvoiceIQ Decision Report
+========================
+Decision: FLAG
+Confidence: high
+Invoice: invoice_1_happy_path_INV-3001.pdf
+Vendor: Meridian Office Supplies
+Amount: $4260.00
+Matched PO: PO-1001
+Run ID: 67040e53-be4c-4608-a23c-4078870d5c60
+
+Summary: The invoice from Meridian Office Supplies for $4260.00 has been flagged due to Duplicate Detection concern. 1 issue was detected that require human review before payment can proceed.
+
+Flags (1):
+  - [HIGH] Exact Invoice Number Match: Invoice 'INV-3001' from vendor 'Meridian Office Supplies' was already processed on 2026-06-25 (0 days ago, within the 60-day window from 2026-06-25).

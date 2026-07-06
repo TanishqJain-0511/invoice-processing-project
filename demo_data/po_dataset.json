@@ -1,0 +1,86 @@
+[
+  {
+    "po_number": "PO-2001",
+    "vendor_name": "Lakeshore Packaging Co.",
+    "line_items": [
+      { "description": "Corrugated Shipping Box - Medium", "quantity": 100, "unit_price": 3.20 }
+    ],
+    "subtotal": 320.00,
+    "tax": 16.00,
+    "po_total": 336.00,
+    "status": "open",
+    "date_issued": "2026-06-10"
+  },
+  {
+    "po_number": "PO-2002",
+    "vendor_name": "BrightLeaf Print Studio",
+    "line_items": [
+      { "description": "Poster Print - Large Format", "quantity": 150, "unit_price": 9.00 }
+    ],
+    "subtotal": 1350.00,
+    "tax": 81.00,
+    "po_total": 1431.00,
+    "status": "open",
+    "date_issued": "2026-06-05"
+  },
+  {
+    "po_number": "PO-2003",
+    "vendor_name": "Cascade Machine Works",
+    "line_items": [
+      { "description": "Precision Gearbox Unit", "quantity": 20, "unit_price": 900.00 }
+    ],
+    "subtotal": 18000.00,
+    "tax": 0.00,
+    "po_total": 18000.00,
+    "status": "open",
+    "date_issued": "2026-06-08"
+  },
+  {
+    "po_number": "PO-2004",
+    "vendor_name": "Vantage Steel Supply",
+    "line_items": [
+      { "description": "Rebar Coil - Grade 60", "quantity": 60, "unit_price": 45.00 }
+    ],
+    "subtotal": 2700.00,
+    "tax": 0.00,
+    "po_total": 2700.00,
+    "status": "open",
+    "date_issued": "2026-06-09"
+  },
+  {
+    "po_number": "PO-2005",
+    "vendor_name": "Overlook Freight Systems",
+    "line_items": [
+      { "description": "Pallet Wrap Roll - Industrial", "quantity": 15, "unit_price": 28.00 }
+    ],
+    "subtotal": 420.00,
+    "tax": 0.00,
+    "po_total": 420.00,
+    "status": "open",
+    "date_issued": "2026-06-07"
+  },
+  {
+    "po_number": "PO-2006",
+    "vendor_name": "Redwood Coatings Inc.",
+    "line_items": [
+      { "description": "Powder Coat Finish - Standard Color", "quantity": 80, "unit_price": 6.50 }
+    ],
+    "subtotal": 520.00,
+    "tax": 0.00,
+    "po_total": 520.00,
+    "status": "open",
+    "date_issued": "2026-06-11"
+  },
+  {
+    "po_number": "PO-2010",
+    "vendor_name": "Granite Ridge Components",
+    "line_items": [
+      { "description": "M8 Hex Bolt - Zinc Plated", "quantity": 500, "unit_price": 0.85 }
+    ],
+    "subtotal": 425.00,
+    "tax": 0.00,
+    "po_total": 425.00,
+    "status": "open",
+    "date_issued": "2026-06-15"
+  }
+]
