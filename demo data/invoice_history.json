@@ -1,0 +1,12 @@
+{
+  "invoice_history": [
+    {
+      "vendor_name": "Global Parts Co.",
+      "invoice_number": "INV-7788",
+      "amount": 3450.00,
+      "invoice_date": "2026-05-15",
+      "processed_date": "2026-05-16",
+      "_note": "Original invoice already on file. Test invoice 5 (Edge F) deliberately resubmits this same vendor + invoice number to trigger exact-match duplicate detection within the 60-day window."
+    }
+  ]
+}

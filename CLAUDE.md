@@ -17,7 +17,11 @@ technical case study submission.
 
 ## Current Status
 
-**Step 1 COMPLETE — 24/24 tests passing as of last run.**
+**Steps 1–7 COMPLETE.** Pipeline (24/24 tests), FastAPI + Supabase backend, Next.js frontend
+(enterprise UI overhaul), and deployment are all done and live:
+
+- Frontend: https://invoice-processing-project.vercel.app
+- Backend:  https://invoice-processing-project-production.up.railway.app (docs at `/docs`)
 
 ```
 ✅ Invoice 1 — approve       (happy path, no flags)
@@ -27,7 +31,12 @@ technical case study submission.
 ✅ Invoice 5 — flag          (Exact Invoice Number Match)
 ```
 
-Next: **Step 2 — FastAPI wrapper + Supabase integration**
+**Live demo gotcha:** every successful run through `/api/process` appends to Supabase's
+`invoice_history` table, so re-running the same test PDF across sessions eventually makes it
+flag itself as a duplicate. Before recording a demo, reset via `demo data/reset.sql` in the
+Supabase SQL editor — see `demo data/README.md` for the full pre-recording checklist.
+
+Next: **Step 8 — Demo recording**
 
 ---
 
@@ -50,22 +59,23 @@ Next: **Step 2 — FastAPI wrapper + Supabase integration**
 | PDF fast path | pdfplumber | ✅ Built |
 | OCR fallback | Docling | ⏳ Deferred (Edge Case A) |
 | Schema validation | Pydantic v2 | ✅ Built |
-| Backend | FastAPI (async) | ⏳ Step 2 |
-| Database | Supabase Postgres | ⏳ Step 2 |
-| Frontend | Next.js + Tailwind + shadcn/ui | ⏳ Step 3–4 |
-| Deployment | Vercel (frontend) + Railway/Render (backend) | ⏳ Step 6 |
+| Backend | FastAPI (async) | ✅ Built — `backend/api/` |
+| Database | Supabase Postgres | ✅ Built — schema/seed in `db/` |
+| Frontend | Next.js 16 + Tailwind + shadcn/ui | ✅ Built — `frontend/` |
+| Deployment | Vercel (frontend) + Railway (backend) | ✅ Done — live URLs above |
 
 ---
 
 ## Build Order
 
-- [x] **Step 1** — LangGraph pipeline, local only. 24/24 tests passing. ✅ DONE
-- [ ] **Step 2** — FastAPI wrapper + Supabase reference data + run persistence ← NEXT
-- [ ] Step 3 — Next.js upload page + live run view
-- [ ] Step 4 — Dashboard / history view
-- [ ] Step 5 — Polish, error handling, loading states
-- [ ] Step 6 — Deploy (Vercel + Railway/Render), re-test end-to-end
-- [ ] Step 7 — Record demo
+- [x] Step 1 — LangGraph pipeline, local only. 24/24 tests passing.
+- [x] Step 2 — FastAPI wrapper + Supabase reference data + run persistence.
+- [x] Step 3 — Next.js upload page + live run view.
+- [x] Step 4 — Dashboard / history view.
+- [x] Step 5 — Polish, error handling, loading states.
+- [x] Step 6 — Deploy (Vercel + Railway), re-tested end-to-end.
+- [x] Step 7 — Full UI overhaul (enterprise design system).
+- [ ] **Step 8** — Record demo ← NEXT (see `demo data/README.md`)
 
 ---
 
@@ -148,36 +158,50 @@ All files in `test_data/` — do not modify.
 ```
 invoice-processing-project/
 ├── CLAUDE.md                   ← this file (Claude's persistent context)
-├── understanding.md            ← human-readable project explanation
+├── understanding.md            ← human-readable project explanation (kept current — check here first)
 ├── Future_Scope.md             ← deferred items + implementation deviations
-├── pyproject.toml              ← dependencies (Python 3.11 required)
-├── .env.example                ← env var template
-├── .env                        ← actual secrets (gitignored)
-├── run_pipeline.py             ← CLI: python run_pipeline.py <pdf_path>
 ├── context-files/              ← original spec docs (do not modify)
 │   ├── phase_1.md
 │   ├── phase_2.md
+│   ├── phase_2_extended_testing.md
 │   └── tech_stack.md
-├── test_data/                  ← 5 PDFs + 3 reference JSONs (do not modify)
-├── pipeline/
-│   ├── models.py               ← Pydantic: InvoiceExtraction, Flag, DecisionOutput
-│   ├── state.py                ← LangGraph TypedDict state definition
-│   ├── graph.py                ← build_pipeline() — StateGraph wiring
-│   ├── nodes/
-│   │   ├── extraction.py       ← Stage 1: PDF parse + LLM extraction
-│   │   ├── validation.py       ← Stage 2: field checks + math check + date check
-│   │   ├── matching.py         ← Stage 3: PO match, vendor, tolerance, duplicates
-│   │   └── decision.py         ← Stage 4: final decision + reasoning trail
-│   └── utils/
-│       ├── tolerance.py        ← tiered tolerance math (pure functions, unit-testable)
-│       └── pdf_parser.py       ← pdfplumber wrapper + OCR detection check
-└── tests/
-    └── test_pipeline.py        ← 24 assertions across 5 invoices
+├── demo data/                  ← self-contained demo kit: 5 PDFs, reference JSON, reset.sql, checklist
+├── db/
+│   ├── schema.sql               ← Supabase table definitions
+│   └── seed.sql                 ← reference data load (POs, vendors, invoice history)
+├── backend/                     ← Python: pipeline + FastAPI server
+│   ├── pyproject.toml
+│   ├── .env / .env.example      ← OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY
+│   ├── run_pipeline.py          ← CLI: python run_pipeline.py <pdf_path>
+│   ├── test_data/               ← 5 PDFs + 3 reference JSONs (do not modify)
+│   ├── tests/
+│   │   └── test_pipeline.py     ← 24 assertions across 5 invoices
+│   ├── pipeline/
+│   │   ├── models.py            ← Pydantic: InvoiceExtraction, Flag, DecisionOutput
+│   │   ├── state.py             ← LangGraph TypedDict state definition
+│   │   ├── graph.py             ← build_pipeline() — StateGraph wiring
+│   │   ├── nodes/
+│   │   │   ├── extraction.py    ← Stage 1: PDF parse + LLM extraction
+│   │   │   ├── validation.py    ← Stage 2: field checks + math check + date check
+│   │   │   ├── matching.py      ← Stage 3: PO match, vendor, tolerance, duplicates
+│   │   │   └── decision.py      ← Stage 4: final decision + reasoning trail
+│   │   └── utils/
+│   │       ├── tolerance.py     ← tiered tolerance math (pure functions, unit-testable)
+│   │       └── pdf_parser.py    ← pdfplumber wrapper + OCR detection check
+│   └── api/
+│       ├── main.py              ← FastAPI: POST /api/process, GET /api/runs, GET /api/runs/{id}
+│       ├── db.py                ← Supabase client singleton
+│       └── schemas.py           ← Pydantic response models
+└── frontend/                    ← Next.js 16 (App Router, TypeScript, Tailwind, shadcn/ui)
+    └── src/app/                 ← dashboard, upload, runs, config, admin, help, login
 ```
+
+See `understanding.md` for the full annotated frontend component tree and run instructions —
+it's kept up to date; this file's map is the quick-reference version.
 
 ---
 
-## Python & Environment
+## Python & Environment (all commands run from `backend/`)
 
 ```bash
 # Python version (already set via pyproject local)
@@ -187,17 +211,24 @@ pyenv local 3.11.11
 pip install -e ".[dev]"
 
 # Run tests
-pytest tests/ -v
+cd backend && pytest tests/ -v
 
 # Run single invoice via CLI
-python run_pipeline.py test_data/invoice_1_happy_path_INV-3001.pdf
+cd backend && python run_pipeline.py test_data/invoice_1_happy_path_INV-3001.pdf
+
+# Start the FastAPI backend
+cd backend && uvicorn api.main:app --reload   # → http://localhost:8000
+
+# Start the Next.js frontend
+cd frontend && npm run dev                     # → http://localhost:3000
 ```
 
-
-**Required env vars** (in `.env`):
+**Required env vars** (in `backend/.env`):
 ```
 OPENAI_API_KEY=sk-proj-...
-REFERENCE_DATE=2026-06-25
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_SERVICE_KEY=sb_secret_...
+# REFERENCE_DATE=2026-06-25   (optional, CLI only)
 ```
 
 ---
@@ -206,23 +237,5 @@ REFERENCE_DATE=2026-06-25
 
 - Edge Case A — scanned invoice / OCR via Docling
 - Unapproved vendor test case
-- FastAPI backend, Supabase, Next.js frontend (Steps 2–4)
 - PDF generation script (`scripts/generate_invoices.py`)
 - Per-field extraction confidence (currently overall only)
-
-
-
-InvoiceIQ Decision Report
-========================
-Decision: FLAG
-Confidence: high
-Invoice: invoice_1_happy_path_INV-3001.pdf
-Vendor: Meridian Office Supplies
-Amount: $4260.00
-Matched PO: PO-1001
-Run ID: 67040e53-be4c-4608-a23c-4078870d5c60
-
-Summary: The invoice from Meridian Office Supplies for $4260.00 has been flagged due to Duplicate Detection concern. 1 issue was detected that require human review before payment can proceed.
-
-Flags (1):
-  - [HIGH] Exact Invoice Number Match: Invoice 'INV-3001' from vendor 'Meridian Office Supplies' was already processed on 2026-06-25 (0 days ago, within the 60-day window from 2026-06-25).

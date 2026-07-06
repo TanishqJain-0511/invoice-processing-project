@@ -1,0 +1,10 @@
+{
+  "approved_vendors": [
+    { "vendor_name": "Meridian Office Supplies", "approved": true },
+    { "vendor_name": "Coastal Print & Design", "approved": true },
+    { "vendor_name": "Harbor Logistics Parts", "approved": true },
+    { "vendor_name": "Silverline Manufacturing", "approved": true },
+    { "vendor_name": "Global Parts Co.", "approved": true },
+    { "vendor_name": "TBD - Edge A (scanned invoice sample)", "approved": true, "_note": "Placeholder - to be finalized with the real vendor name once the HuggingFace scanned sample is resolved." }
+  ]
+}
