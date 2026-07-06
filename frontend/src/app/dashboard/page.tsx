@@ -96,7 +96,6 @@ export default function DashboardPage() {
   const flagged = scoped.filter((r) => r.decision === "flag").length;
   const rejected = scoped.filter((r) => r.decision === "reject").length;
   const recent = scoped.slice(0, 6);
-  const flaggedRuns = scoped.filter((r) => r.decision === "flag");
 
   function historyHref(status: "all" | "approve" | "flag" | "reject") {
     const params = dateRangeToParams(dateRange);
@@ -317,45 +316,6 @@ export default function DashboardPage() {
               </div>
             )}
           </SectionCard>
-
-          {/* Flagged invoices summary */}
-          {!loading && flaggedRuns.length > 0 && (
-            <SectionCard
-              title="Needs Your Review"
-              description="These invoices were flagged by the AI and require human judgment."
-              className="mt-4"
-              noPadding
-              action={
-                <Link
-                  href="/runs"
-                  className="text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors"
-                >
-                  View all
-                </Link>
-              }
-            >
-              <div className="divide-y divide-gray-50">
-                {flaggedRuns.slice(0, 3).map((run) => (
-                  <Link
-                    key={run.id}
-                    href={`/runs/${run.id}`}
-                    className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors group"
-                  >
-                    <div className="w-1 h-8 rounded-full bg-amber-400 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">
-                        {run.invoice_filename ?? "Invoice"}
-                      </p>
-                      <p className="text-xs text-gray-400 truncate">
-                        {run.flag_categories.join(", ") || "Flagged for review"}
-                      </p>
-                    </div>
-                    <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-gray-500 transition-colors" />
-                  </Link>
-                ))}
-              </div>
-            </SectionCard>
-          )}
         </div>
       </div>
     </div>

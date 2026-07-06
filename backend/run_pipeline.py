@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path(__file__).parent
-TEST_DATA_DIR = BASE_DIR / "test_data"
+TEST_DATA_DIR = BASE_DIR.parent / "test_data"
 
 DEFAULT_REFERENCE_DATE = os.getenv("REFERENCE_DATE", "2026-06-25")
 

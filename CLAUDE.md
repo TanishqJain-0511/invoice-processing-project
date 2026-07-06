@@ -40,13 +40,12 @@ Next: **Step 8 — Demo recording**
 
 ---
 
-## Spec Files (read these before any rule changes)
+## Spec Files
 
-| File | Contents |
-|------|----------|
-| `context-files/phase_1.md` | Business rules, four-stage process map, output contract, flag taxonomy |
-| `context-files/phase_2.md` | PO dataset, vendor list, invoice history, 5 test invoice specs + expected outcomes |
-| `context-files/tech_stack.md` | Stack choices, architecture, build order, open decisions |
+`context-files/` (original phase_1.md / phase_2.md / phase_2_extended_testing.md / tech_stack.md
+spec docs) has been removed — all business rules, tolerance formulas, and flag taxonomy they
+defined are captured in this file's "Key Business Rules" and "Tolerance Formula" sections below,
+and in `Future_Scope.md` for deviations. Consult those instead.
 
 ---
 
@@ -160,20 +159,15 @@ invoice-processing-project/
 ├── CLAUDE.md                   ← this file (Claude's persistent context)
 ├── understanding.md            ← human-readable project explanation (kept current — check here first)
 ├── Future_Scope.md             ← deferred items + implementation deviations
-├── context-files/              ← original spec docs (do not modify)
-│   ├── phase_1.md
-│   ├── phase_2.md
-│   ├── phase_2_extended_testing.md
-│   └── tech_stack.md
 ├── demo data/                  ← self-contained demo kit: 5 PDFs, reference JSON, reset.sql, checklist
+├── test_data/                   ← 5 PDFs + 3 reference JSONs (do not modify) — shared by CLI + tests
 ├── db/
 │   ├── schema.sql               ← Supabase table definitions
 │   └── seed.sql                 ← reference data load (POs, vendors, invoice history)
 ├── backend/                     ← Python: pipeline + FastAPI server
 │   ├── pyproject.toml
 │   ├── .env / .env.example      ← OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY
-│   ├── run_pipeline.py          ← CLI: python run_pipeline.py <pdf_path>
-│   ├── test_data/               ← 5 PDFs + 3 reference JSONs (do not modify)
+│   ├── run_pipeline.py          ← CLI: python run_pipeline.py <pdf_path> (reads ../test_data/)
 │   ├── tests/
 │   │   └── test_pipeline.py     ← 24 assertions across 5 invoices
 │   ├── pipeline/
@@ -213,8 +207,8 @@ pip install -e ".[dev]"
 # Run tests
 cd backend && pytest tests/ -v
 
-# Run single invoice via CLI
-cd backend && python run_pipeline.py test_data/invoice_1_happy_path_INV-3001.pdf
+# Run single invoice via CLI (test_data/ lives at the project root, one level up)
+cd backend && python run_pipeline.py ../test_data/invoice_1_happy_path_INV-3001.pdf
 
 # Start the FastAPI backend
 cd backend && uvicorn api.main:app --reload   # → http://localhost:8000

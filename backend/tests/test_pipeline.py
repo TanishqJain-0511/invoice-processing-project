@@ -28,7 +28,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path(__file__).parent.parent
-TEST_DATA_DIR = BASE_DIR / "test_data"
+TEST_DATA_DIR = BASE_DIR.parent / "test_data"
 REFERENCE_DATE = "2026-06-25"
 
 

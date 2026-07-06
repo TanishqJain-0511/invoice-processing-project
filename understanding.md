@@ -44,10 +44,14 @@ confidence (or flags issues) as it goes.
 ### Stage 1 — Extraction
 **What:** Read the PDF and pull out structured data.
 
-**How:** First tries plain text extraction (fast, works for clean PDFs). If that
-fails (scanned/image-based invoice), falls back to OCR. Then sends the raw text to
-GPT-4o-mini with a carefully written prompt, which returns structured fields:
-vendor name, invoice number, date, line items, totals, and any PO reference.
+**How:** Tries plain text extraction via `pdfplumber` first (fast, works for any PDF
+with a real text layer). If the PDF has no usable text — which is what a scanned
+image invoice looks like to `pdfplumber` — the system does **not** guess or run
+OCR. It detects the failure, flags the invoice "Low Extraction Confidence," and
+routes it straight to Stage 4 for human review. See *"Why no OCR for scanned
+invoices?"* under Key Design Decisions for the reasoning. Otherwise, the raw text
+is sent to GPT-4o-mini with a carefully written prompt, which returns structured
+fields: vendor name, invoice number, date, line items, totals, and any PO reference.
 
 **Key output:** An `InvoiceExtraction` object + `extraction_confidence` (high/medium/low).
 
@@ -216,9 +220,10 @@ invoice-processing-project/
 │   │   ├── main.py             FastAPI app: POST /api/process, GET /api/runs, GET /api/runs/{id}
 │   │   ├── db.py               Supabase client singleton (graceful fallback if unavailable)
 │   │   └── schemas.py          Pydantic models — RunSummary includes flag_categories + flags_raised
-│   ├── test_data/              5 test PDFs + 3 reference JSONs
 │   └── tests/
-│       └── test_pipeline.py    24 integration tests (load from local JSON, always pass)
+│       └── test_pipeline.py    24 integration tests (load from ../test_data/, always pass)
+├── test_data/                   5 test PDFs + 3 reference JSONs, at project root — shared by
+│                                the CLI (run_pipeline.py) and the pytest suite
 ├── frontend/                   ← Next.js 16 (App Router, TypeScript, Tailwind, shadcn/ui)
 │   └── src/
 │       ├── lib/
@@ -277,9 +282,9 @@ LangGraph's reducer pattern — each node just appends its new entries.
 cd backend && pytest tests/ -v
 ```
 
-**Run a single invoice via CLI (from backend/):**
+**Run a single invoice via CLI (from backend/; test_data/ lives at the project root):**
 ```bash
-cd backend && python run_pipeline.py test_data/invoice_1_happy_path_INV-3001.pdf
+cd backend && python run_pipeline.py ../test_data/invoice_1_happy_path_INV-3001.pdf
 ```
 
 **Start the FastAPI backend (from backend/):**
@@ -302,7 +307,7 @@ cd frontend && npm run dev
 
 **Test the API directly:**
 ```bash
-curl -F "file=@backend/test_data/invoice_1_happy_path_INV-3001.pdf" \
+curl -F "file=@test_data/invoice_1_happy_path_INV-3001.pdf" \
      -F "reference_date=2026-06-25" \
      http://localhost:8000/api/process
 ```
@@ -499,3 +504,23 @@ figures in the tolerance table behave as minimum guaranteed tolerances, not maxi
 limits. This was confirmed by the spec's own worked example for Invoice 4: the spec
 explicitly states "3× cap = $450", which only makes sense if the $150 is a floor
 (max(2%×$2,000, $150) = $150), not a ceiling (min(2%×$2,000, $150) = $40 → 3×=$120).
+
+**Why no OCR for scanned invoices?** The problem statement calls out scanned
+images as one of the messy realities of real vendor invoices, and this system
+takes that seriously — but not by bolting on OCR. `pipeline/utils/pdf_parser.py`
+checks whether `pdfplumber` pulled a usable text layer; if it didn't (exactly
+what happens with a scanned image), extraction stops there. The run is flagged
+"Low Extraction Confidence" and routed to a human reviewer instead of continuing
+into Stage 3/4 on guessed data.
+
+This is a deliberate precision-over-recall tradeoff. OCR on a low-resolution or
+skewed scan can misread a single digit — a `3` for an `8`, a `.` for a `,` — with
+no signal that anything went wrong. In an AP context, a confidently wrong total is
+worse than an invoice that honestly reports "I couldn't read this reliably."
+Flagging for review preserves the one property that matters most: every number
+the pipeline acts on, it's actually confident in. Full OCR (via Docling, per
+`tech_stack.md`) remains a scoped, well-understood extension — see
+`Future_Scope.md` → "Deferred: Edge Case A" for exactly what it would take — it's
+deferred by choice, not because it's hard, since adding a ~2GB ML dependency for
+an invoice type outside the actual test set carries real deployment risk for
+limited proven benefit at this stage.

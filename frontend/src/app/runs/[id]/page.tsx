@@ -12,7 +12,6 @@ import {
   Calendar,
   DollarSign,
   Shield,
-  Info,
 } from "lucide-react";
 import { getRun, RunDetail, Flag, LineItem } from "@/lib/api";
 import ConfidenceBar from "@/components/shared/ConfidenceBar";
@@ -37,10 +36,10 @@ function groupByStage(trail: string[]): Record<string, string[]> {
   return groups;
 }
 
-/* ── Degraded / execution-issue log detection ─────────────────
-   Flags technical failure conditions (OCR fallback, unparseable data,
-   routing shortcuts) as distinct from ordinary business flags (duplicate,
-   amount mismatch, etc.) which already have their own flag UI. */
+/* ── Flagged log line detection ────────────────────────────────
+   A log line is highlighted red if it represents a technical/degraded
+   condition (OCR fallback, unparseable data, routing shortcuts) or if it
+   corresponds to one of the flags actually raised on this run. */
 const DEGRADED_LOG_MARKERS = [
   /ocr fallback/i,
   /yielded empty or unusable/i,
@@ -50,8 +49,15 @@ const DEGRADED_LOG_MARKERS = [
   /cannot proceed/i,
 ];
 
-function isDegradedLogLine(line: string): boolean {
-  return DEGRADED_LOG_MARKERS.some((re) => re.test(line));
+function stripStagePrefix(line: string): string {
+  return line.replace(/^Stage\s+\d+[a-z]?\s*\([^)]*\):\s*/i, "").trim();
+}
+
+function isFlaggedLogLine(line: string, flags: Flag[]): boolean {
+  if (DEGRADED_LOG_MARKERS.some((re) => re.test(line))) return true;
+  if (/\bFLAG\s*—/.test(line) || /\bREJECT\s*—/.test(line) || /flag\(s\) raised/i.test(line)) return true;
+  const stripped = stripStagePrefix(line);
+  return flags.some((f) => stripped === f.detail || stripped.includes(f.detail) || f.detail.includes(stripped));
 }
 
 /* ── Decision style config ───────────────────────────────────── */
@@ -136,36 +142,19 @@ function QuickFact({ icon: Icon, label, value }: { icon: React.ElementType; labe
   );
 }
 
-/* ── Stage info tooltip ───────────────────────────────────────── */
-const STAGE_INFO: Record<string, string> = {
-  Extraction: "Parses the PDF and pulls out structured fields (vendor, amounts, dates) using GPT-4o mini.",
-  Decision: "Applies precedence rules to all flags raised so far and produces the final approve/flag/reject verdict.",
-};
-
-function StageInfoIcon({ name }: { name: string }) {
-  const text = STAGE_INFO[name];
-  if (!text) return null;
-  return (
-    <span className="relative inline-flex group/info">
-      <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
-      <span className="hidden group-hover/info:block absolute left-1/2 -translate-x-1/2 bottom-5 z-20 w-56 bg-gray-900 text-white text-xs rounded-lg p-2.5 leading-relaxed shadow-lg">
-        {text}
-      </span>
-    </span>
-  );
-}
-
 /* ── Collapsible pipeline stage ──────────────────────────────── */
 function PipelineStageCard({
   prefix,
   name,
   color,
   lines,
+  flags,
 }: {
   prefix: string;
   name: string;
   color: (typeof STAGE_DEFS)[number]["color"];
   lines: string[];
+  flags: Flag[];
 }) {
   const done = lines.length > 0;
 
@@ -184,28 +173,26 @@ function PipelineStageCard({
     <details className="group rounded-lg border border-gray-200 overflow-hidden">
       <summary className={`flex items-center gap-3 px-4 py-3 cursor-pointer list-none ${color.bg} ${color.border} border hover:brightness-95 transition-all`}>
         <CheckCircle className={`w-4 h-4 shrink-0 ${color.text}`} />
-        <span className={`text-sm font-semibold flex-1 ${color.text} flex items-center gap-1.5`}>
+        <span className={`text-sm font-semibold flex-1 ${color.text}`}>
           {prefix} — {name}
-          <StageInfoIcon name={name} />
         </span>
-        <span className="text-sm text-gray-500 mr-2">{lines.length} log{lines.length !== 1 ? "s" : ""}</span>
         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform group-open:rotate-180`} />
       </summary>
       <div className="px-4 py-3 bg-white border-t border-gray-100">
         <ul className="space-y-1.5">
           {lines.map((line, i) => {
-            const degraded = isDegradedLogLine(line);
+            const flagged = isFlaggedLogLine(line, flags);
             return (
               <li
                 key={i}
                 className={`text-sm leading-relaxed flex gap-2 ${
-                  degraded ? "text-red-700 bg-red-50 border border-red-100 rounded px-2 py-1" : "text-gray-600"
+                  flagged ? "text-red-700 bg-red-50 border border-red-100 rounded px-2 py-1" : "text-gray-600"
                 }`}
               >
-                <span className={`shrink-0 mt-0.5 font-mono text-xs ${degraded ? "text-red-400" : "text-gray-300"}`}>
+                <span className={`shrink-0 mt-0.5 font-mono text-xs ${flagged ? "text-red-400" : "text-gray-300"}`}>
                   Step {i + 1}
                 </span>
-                <span>{line.replace(/^Stage\s+\d+[a-z]?\s*\([^)]*\):\s*/i, "")}</span>
+                <span>{stripStagePrefix(line)}</span>
               </li>
             );
           })}
@@ -260,13 +247,14 @@ export default async function RunPage({
         <div className="col-span-2 space-y-4 sticky top-6 self-start">
           {/* Decision Hero */}
           <div className={`rounded-lg border ${dc.borderColor} ${dc.bgColor} p-5`}>
-            <div className={`w-10 h-10 rounded-xl ${dc.iconBg} flex items-center justify-center mb-4`}>
-              <DecisionIcon className={`w-5 h-5 ${dc.iconColor}`} />
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className={`text-3xl font-bold tracking-tight ${dc.titleColor}`}>
+                {dc.label}
+              </h1>
+              <div className={`w-10 h-10 rounded-xl ${dc.iconBg} flex items-center justify-center shrink-0`}>
+                <DecisionIcon className={`w-5 h-5 ${dc.iconColor}`} />
+              </div>
             </div>
-
-            <h1 className={`text-3xl font-bold tracking-tight ${dc.titleColor} mb-1`}>
-              {dc.label}
-            </h1>
 
             <p className="text-sm text-gray-600 mt-3 leading-relaxed border-t border-gray-200/60 pt-3">
               {dc.action}
@@ -415,6 +403,7 @@ export default async function RunPage({
                   name={stage.name}
                   color={stage.color}
                   lines={stageGroups[stage.prefix] ?? []}
+                  flags={run.flags_raised}
                 />
               ))}
             </div>

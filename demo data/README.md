@@ -8,7 +8,8 @@ and `db/` at the project root — these are copies for convenience, not a separa
 | File | Purpose |
 |------|---------|
 | `invoice_1_happy_path_INV-3001.pdf` ... `invoice_5_edgeF_duplicate_INV-7788.pdf` | The 5 invoices to upload, in order |
-| `po_dataset.json`, `approved_vendors.json`, `invoice_history.json` | Reference data these PDFs are matched against (already loaded into Supabase via `seed.sql`) |
+| `po_dataset.json`, `approved_vendors.json`, `invoice_history.json` | Reference data these PDFs are matched against (already loaded into Supabase via `seed.sql`) — wrapped format (`{"purchase_orders": [...]}` etc.), matches what the Python CLI/pytest expect |
+| `po_dataset.upload.json`, `approved_vendors.upload.json`, `invoice_history.upload.json` | Same data as bare JSON arrays — use **these** when uploading via the app's Config page "reference data" override, which requires a top-level array and will reject the wrapped files with "Must be a JSON array" |
 | `schema.sql` | Supabase table definitions (already applied — for reference only) |
 | `seed.sql` | Reference data load (already applied — re-run only if rebuilding Supabase from scratch) |
 | `reset.sql` | Clears `pipeline_runs` and `invoice_history` pollution from prior runs |
