@@ -108,8 +108,8 @@ async def process_invoice(
     - reference_date (optional, YYYY-MM-DD): defaults to today.
     - po_dataset_json / vendor_list_json / invoice_history_json (optional JSON strings):
       when provided, used instead of Supabase reference data (stateless / local mode).
-    - flag_rules_json (optional JSON string): maps flag subcategory → "reject"|"flag"
-      to override which flags escalate to reject.
+    - flag_rules_json (optional JSON string): maps flag subcategory → "reject"|"flag"|"approve"
+      to override how each flag type escalates the final decision.
     """
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Uploaded file must be a PDF.")

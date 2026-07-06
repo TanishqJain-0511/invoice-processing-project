@@ -5,6 +5,7 @@ import { Lock, CheckCircle, AlertTriangle, Upload, X, Info, RotateCcw } from "lu
 import PageHeader from "@/components/layout/PageHeader";
 import SectionCard from "@/components/shared/SectionCard";
 import { getRuns, RunSummary } from "@/lib/api";
+import { FlagRuleValue, computeEscalatedDecision } from "@/lib/decision";
 
 /* ── Flag taxonomy ─────────────────────────────────────────── */
 const FLAG_TAXONOMY = [
@@ -55,7 +56,7 @@ const FLAG_TAXONOMY = [
 ];
 
 const FLAG_RULES_KEY = "invoiceProcessor:flagRules";
-type FlagRules = Record<string, "flag" | "reject">;
+type FlagRules = Record<string, FlagRuleValue>;
 
 /* ── Data sources ──────────────────────────────────────────── */
 type DataKey = "poDataset" | "vendorList" | "invoiceHistory";
@@ -86,7 +87,7 @@ type Tab = (typeof TABS)[number];
 export default function ConfigPage() {
   const [tab, setTab] = useState<Tab>("Business Rules");
   const [flagRules, setFlagRules] = useState<FlagRules>({});
-  const [pending, setPending] = useState<{ sub: string; val: "flag" | "reject" } | null>(null);
+  const [pending, setPending] = useState<{ sub: string; val: FlagRuleValue } | null>(null);
   const [affectedCount, setAffectedCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [dataSources, setDataSources] = useState<Record<DataKey, string | null>>({ poDataset: null, vendorList: null, invoiceHistory: null });
@@ -109,17 +110,21 @@ export default function ConfigPage() {
     setDataSources(ds);
   }, []);
 
-  function getRuleFor(sub: string): "flag" | "reject" {
+  function getRuleFor(sub: string): FlagRuleValue {
     if (sub in flagRules) return flagRules[sub];
     const flat = FLAG_TAXONOMY.flatMap((c) => c.flags).find((f) => f.subcategory === sub);
-    return (flat?.default ?? "flag") as "flag" | "reject";
+    return (flat?.default ?? "flag") as FlagRuleValue;
   }
 
-  async function requestToggle(sub: string, val: "flag" | "reject") {
+  async function requestToggle(sub: string, val: FlagRuleValue) {
     let count = 0;
     try {
       const runs: RunSummary[] = await getRuns();
-      count = runs.filter((r) => r.flags_raised?.some((f) => f.subcategory === sub)).length;
+      const nextRules = { ...flagRules, [sub]: val };
+      count = runs.filter(
+        (r) => r.flags_raised?.some((f) => f.subcategory === sub)
+          && computeEscalatedDecision(r.flags_raised ?? [], nextRules) !== r.decision
+      ).length;
     } catch {}
     setAffectedCount(count);
     setPending({ sub, val });
@@ -229,7 +234,15 @@ export default function ConfigPage() {
               <p className="text-sm font-semibold text-amber-900">Confirm rule change</p>
               <p className="text-sm text-amber-700 mt-0.5">
                 Setting <span className="font-medium">&ldquo;{pending.sub}&rdquo;</span> to{" "}
-                <span className={`font-bold ${pending.val === "reject" ? "text-red-700" : "text-amber-700"}`}>
+                <span
+                  className={`font-bold ${
+                    pending.val === "reject"
+                      ? "text-red-700"
+                      : pending.val === "approve"
+                      ? "text-emerald-700"
+                      : "text-amber-700"
+                  }`}
+                >
                   {pending.val.toUpperCase()}
                 </span>
                 {affectedCount > 0 && (
@@ -276,16 +289,20 @@ export default function ConfigPage() {
       {tab === "Business Rules" && (
         <div className="space-y-4">
           <p className="text-sm text-gray-500">
-            Choose which flag types should escalate to <strong>REJECT</strong> instead of <strong>FLAG</strong>.
-            Changes apply to new runs only.
+            Choose how each flag type should be handled: approve, flag for review, or reject.
           </p>
           {FLAG_TAXONOMY.map((group) => (
             <SectionCard key={group.category} title={group.category} description={group.description}>
               <div className="space-y-1">
                 {group.flags.map((flag) => {
                   const current = getRuleFor(flag.subcategory);
-                  const isReject = current === "reject";
                   const isLocked = "locked" in flag && flag.locked;
+
+                  const OPTIONS: { val: FlagRuleValue; label: string; active: string }[] = [
+                    { val: "approve", label: "APPROVE", active: "bg-emerald-100 text-emerald-800" },
+                    { val: "flag", label: "FLAG", active: "bg-amber-100 text-amber-800" },
+                    { val: "reject", label: "REJECT", active: "bg-red-100 text-red-800" },
+                  ];
 
                   return (
                     <div
@@ -302,28 +319,23 @@ export default function ConfigPage() {
 
                       {/* Toggle */}
                       <div className="flex shrink-0 rounded-lg border border-gray-200 overflow-hidden">
-                        <button
-                          disabled={isLocked || !isReject}
-                          onClick={() => !isLocked && !(!isReject) && requestToggle(flag.subcategory, "flag")}
-                          className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
-                            !isReject
-                              ? "bg-amber-100 text-amber-800"
-                              : "bg-white text-gray-400 hover:bg-gray-50"
-                          } ${isLocked ? "cursor-default opacity-60" : "cursor-pointer"}`}
-                        >
-                          FLAG
-                        </button>
-                        <button
-                          disabled={isLocked || isReject}
-                          onClick={() => !isLocked && !isReject && requestToggle(flag.subcategory, "reject")}
-                          className={`px-3 py-1.5 text-xs font-semibold border-l border-gray-200 transition-colors ${
-                            isReject
-                              ? "bg-red-100 text-red-800"
-                              : "bg-white text-gray-400 hover:bg-gray-50"
-                          } ${isLocked ? "cursor-default opacity-60" : "cursor-pointer"}`}
-                        >
-                          REJECT
-                        </button>
+                        {OPTIONS.map((opt, i) => {
+                          const isActive = current === opt.val;
+                          return (
+                            <button
+                              key={opt.val}
+                              disabled={isLocked || isActive}
+                              onClick={() => !isLocked && !isActive && requestToggle(flag.subcategory, opt.val)}
+                              className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
+                                i > 0 ? "border-l border-gray-200" : ""
+                              } ${
+                                isActive ? opt.active : "bg-white text-gray-400 hover:bg-gray-50"
+                              } ${isLocked ? "cursor-default opacity-60" : "cursor-pointer"}`}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   );

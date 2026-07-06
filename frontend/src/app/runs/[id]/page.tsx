@@ -12,14 +12,13 @@ import {
   Calendar,
   DollarSign,
   Shield,
-  ChevronRight,
   Info,
 } from "lucide-react";
 import { getRun, RunDetail, Flag, LineItem } from "@/lib/api";
-import DecisionBadge from "@/components/shared/DecisionBadge";
 import ConfidenceBar from "@/components/shared/ConfidenceBar";
 import SectionCard from "@/components/shared/SectionCard";
-import DownloadActions from "@/components/runs/DownloadActions";
+import DownloadActions, { CopySummaryButton } from "@/components/runs/DownloadActions";
+import { stripPdfExtension } from "@/lib/decision";
 
 /* ── Stage definitions ───────────────────────────────────────── */
 const STAGE_DEFS = [
@@ -36,6 +35,23 @@ function groupByStage(trail: string[]): Record<string, string[]> {
     if (key) groups[key].push(line);
   }
   return groups;
+}
+
+/* ── Degraded / execution-issue log detection ─────────────────
+   Flags technical failure conditions (OCR fallback, unparseable data,
+   routing shortcuts) as distinct from ordinary business flags (duplicate,
+   amount mismatch, etc.) which already have their own flag UI. */
+const DEGRADED_LOG_MARKERS = [
+  /ocr fallback/i,
+  /yielded empty or unusable/i,
+  /could not parse/i,
+  /insufficient data to attempt matching/i,
+  /extraction_confidence=low/i,
+  /cannot proceed/i,
+];
+
+function isDegradedLogLine(line: string): boolean {
+  return DEGRADED_LOG_MARKERS.some((re) => re.test(line));
 }
 
 /* ── Decision style config ───────────────────────────────────── */
@@ -101,7 +117,7 @@ function FlagConfidenceBadge({ value }: { value: string }) {
       ? "bg-amber-50 text-amber-700 border-amber-200"
       : "bg-gray-100 text-gray-600 border-gray-200";
   return (
-    <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${classes}`}>
+    <span className={`text-xs font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border ${classes}`}>
       {value}
     </span>
   );
@@ -113,19 +129,40 @@ function QuickFact({ icon: Icon, label, value }: { icon: React.ElementType; labe
     <div className="flex items-start gap-2.5">
       <Icon className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
       <div>
-        <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">{label}</p>
-        <p className="text-sm font-medium text-gray-900 mt-0.5">{value ?? "—"}</p>
+        <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{label}</p>
+        <p className="text-base font-medium text-gray-900 mt-0.5">{value ?? "—"}</p>
       </div>
     </div>
   );
 }
 
+/* ── Stage info tooltip ───────────────────────────────────────── */
+const STAGE_INFO: Record<string, string> = {
+  Extraction: "Parses the PDF and pulls out structured fields (vendor, amounts, dates) using GPT-4o mini.",
+  Decision: "Applies precedence rules to all flags raised so far and produces the final approve/flag/reject verdict.",
+};
+
+function StageInfoIcon({ name }: { name: string }) {
+  const text = STAGE_INFO[name];
+  if (!text) return null;
+  return (
+    <span className="relative inline-flex group/info">
+      <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
+      <span className="hidden group-hover/info:block absolute left-1/2 -translate-x-1/2 bottom-5 z-20 w-56 bg-gray-900 text-white text-xs rounded-lg p-2.5 leading-relaxed shadow-lg">
+        {text}
+      </span>
+    </span>
+  );
+}
+
 /* ── Collapsible pipeline stage ──────────────────────────────── */
 function PipelineStageCard({
+  prefix,
   name,
   color,
   lines,
 }: {
+  prefix: string;
   name: string;
   color: (typeof STAGE_DEFS)[number]["color"];
   lines: string[];
@@ -136,9 +173,9 @@ function PipelineStageCard({
     return (
       <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-dashed border-gray-200 opacity-50">
         <div className="w-6 h-6 rounded-md bg-gray-100 flex items-center justify-center shrink-0">
-          <span className="text-[10px] font-bold text-gray-400">—</span>
+          <span className="text-xs font-bold text-gray-400">—</span>
         </div>
-        <p className="text-sm text-gray-400">{name} — skipped</p>
+        <p className="text-sm text-gray-400">{prefix} — {name} — skipped</p>
       </div>
     );
   }
@@ -147,93 +184,48 @@ function PipelineStageCard({
     <details className="group rounded-lg border border-gray-200 overflow-hidden">
       <summary className={`flex items-center gap-3 px-4 py-3 cursor-pointer list-none ${color.bg} ${color.border} border hover:brightness-95 transition-all`}>
         <CheckCircle className={`w-4 h-4 shrink-0 ${color.text}`} />
-        <span className={`text-sm font-semibold flex-1 ${color.text}`}>{name}</span>
-        <span className="text-xs text-gray-500 mr-2">{lines.length} log{lines.length !== 1 ? "s" : ""}</span>
+        <span className={`text-sm font-semibold flex-1 ${color.text} flex items-center gap-1.5`}>
+          {prefix} — {name}
+          <StageInfoIcon name={name} />
+        </span>
+        <span className="text-sm text-gray-500 mr-2">{lines.length} log{lines.length !== 1 ? "s" : ""}</span>
         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform group-open:rotate-180`} />
       </summary>
       <div className="px-4 py-3 bg-white border-t border-gray-100">
-        <ul className="space-y-1">
-          {lines.map((line, i) => (
-            <li key={i} className="text-xs text-gray-600 leading-relaxed flex gap-2">
-              <span className="text-gray-300 shrink-0 mt-0.5 font-mono">{String(i + 1).padStart(2, "0")}</span>
-              <span>{line.replace(/^Stage \d+:\s*/i, "")}</span>
-            </li>
-          ))}
+        <ul className="space-y-1.5">
+          {lines.map((line, i) => {
+            const degraded = isDegradedLogLine(line);
+            return (
+              <li
+                key={i}
+                className={`text-sm leading-relaxed flex gap-2 ${
+                  degraded ? "text-red-700 bg-red-50 border border-red-100 rounded px-2 py-1" : "text-gray-600"
+                }`}
+              >
+                <span className={`shrink-0 mt-0.5 font-mono text-xs ${degraded ? "text-red-400" : "text-gray-300"}`}>
+                  Step {i + 1}
+                </span>
+                <span>{line.replace(/^Stage\s+\d+[a-z]?\s*\([^)]*\):\s*/i, "")}</span>
+              </li>
+            );
+          })}
         </ul>
       </div>
     </details>
   );
 }
 
-/* ── Reasoning timeline step ─────────────────────────────────── */
-function ReasoningStep({
-  index,
-  name,
-  lines,
-  color,
-  isLast,
-}: {
-  index: number;
-  name: string;
-  lines: string[];
-  color: (typeof STAGE_DEFS)[number]["color"];
-  isLast: boolean;
-}) {
-  const done = lines.length > 0;
-
-  return (
-    <div className="flex gap-4">
-      {/* Timeline spine */}
-      <div className="flex flex-col items-center">
-        <div
-          className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 transition-all ${
-            done ? `${color.bg} ${color.border}` : "bg-gray-50 border-gray-200"
-          }`}
-        >
-          {done ? (
-            <CheckCircle className={`w-4 h-4 ${color.text}`} />
-          ) : (
-            <span className="text-xs text-gray-400 font-bold">{index}</span>
-          )}
-        </div>
-        {!isLast && (
-          <div className={`w-px flex-1 min-h-6 mt-1 ${done ? color.dot.replace("bg-", "bg-") + "/30" : "bg-gray-100"}`}
-            style={{ background: done ? undefined : "#f1f5f9" }}
-          />
-        )}
-      </div>
-
-      {/* Content */}
-      <div className={`flex-1 pb-5 min-w-0 ${isLast ? "" : ""}`}>
-        <p className={`text-sm font-semibold mb-1 ${done ? color.text : "text-gray-400"}`}>
-          Stage {index} — {name}
-        </p>
-        {done ? (
-          <ul className="space-y-1">
-            {lines.slice(0, 3).map((line, i) => (
-              <li key={i} className="text-xs text-gray-600 leading-relaxed">
-                {line.replace(/^Stage \d+:\s*/i, "")}
-              </li>
-            ))}
-            {lines.length > 3 && (
-              <li className="text-xs text-gray-400 italic">+{lines.length - 3} more log entries</li>
-            )}
-          </ul>
-        ) : (
-          <p className="text-xs text-gray-400">Stage was skipped</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /* ── Page component ──────────────────────────────────────────── */
 export default async function RunPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ dev?: string }>;
 }) {
   const { id } = await params;
+  const { dev } = await searchParams;
+  const devMode = dev === "1";
 
   let run: RunDetail;
   try {
@@ -246,6 +238,7 @@ export default async function RunPage({
   const dc = DECISION_CONFIG[run.decision] ?? DECISION_CONFIG.flag;
   const DecisionIcon = dc.icon;
   const summary = buildSummary(run);
+  const flagSubcategories = [...new Set(run.flags_raised.map((f) => f.subcategory))];
 
   const amountStr = run.extracted_data.total != null
     ? `$${run.extracted_data.total.toFixed(2)}`
@@ -271,14 +264,9 @@ export default async function RunPage({
               <DecisionIcon className={`w-5 h-5 ${dc.iconColor}`} />
             </div>
 
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">
-              AI Decision
-            </p>
             <h1 className={`text-3xl font-bold tracking-tight ${dc.titleColor} mb-1`}>
               {dc.label}
             </h1>
-
-            <DecisionBadge decision={run.decision} size="md" />
 
             <p className="text-sm text-gray-600 mt-3 leading-relaxed border-t border-gray-200/60 pt-3">
               {dc.action}
@@ -297,9 +285,31 @@ export default async function RunPage({
               </div>
             )}
 
-            <p className="text-xs text-gray-400 mt-3 truncate" title={run.invoice_filename ?? ""}>
-              {run.invoice_filename}
+            <p className="text-sm text-gray-400 mt-3 truncate" title={run.invoice_filename ?? ""}>
+              {stripPdfExtension(run.invoice_filename)}
             </p>
+
+            {/* Flags accordion */}
+            {run.flags_raised.length > 0 && (
+              <details className="group mt-3 pt-3 border-t border-gray-200/60">
+                <summary className="flex items-center justify-between gap-2 cursor-pointer list-none text-sm font-medium text-gray-700">
+                  <span>Flags Raised ({run.flags_raised.length})</span>
+                  <ChevronDown className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="space-y-3 mt-3">
+                  {run.flags_raised.map((flag: Flag, i: number) => (
+                    <div key={i} className="border border-gray-100 bg-white rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <FlagConfidenceBadge value={flag.flag_confidence} />
+                        <span className="text-sm font-medium text-gray-600">{flag.category}</span>
+                      </div>
+                      <p className="text-sm font-semibold text-gray-800 mb-1">{flag.subcategory}</p>
+                      <p className="text-sm text-gray-500 leading-relaxed">{flag.detail}</p>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
 
           {/* Quick Facts */}
@@ -320,64 +330,39 @@ export default async function RunPage({
                 value={run.extracted_data.tax != null ? `$${run.extracted_data.tax.toFixed(2)}` : null}
               />
               <div className="col-span-2 pt-2 border-t border-gray-100 flex items-center justify-between">
-                <span className="text-xs text-gray-500 font-medium">Total Amount</span>
+                <span className="text-sm text-gray-500 font-medium">Total Amount</span>
                 <span className="text-lg font-bold text-gray-900">{amountStr ?? "—"}</span>
               </div>
             </div>
           </SectionCard>
-
-          {/* Flags summary */}
-          {run.flags_raised.length > 0 && (
-            <SectionCard
-              title={`Flags Raised (${run.flags_raised.length})`}
-              description="Issues detected by the AI pipeline"
-            >
-              <div className="space-y-3">
-                {run.flags_raised.map((flag: Flag, i: number) => (
-                  <div key={i} className="border border-gray-100 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                      <FlagConfidenceBadge value={flag.flag_confidence} />
-                      <span className="text-xs font-medium text-gray-600">{flag.category}</span>
-                    </div>
-                    <p className="text-xs font-semibold text-gray-800 mb-1">{flag.subcategory}</p>
-                    <p className="text-xs text-gray-500 leading-relaxed">{flag.detail}</p>
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-          )}
         </div>
 
         {/* ── RIGHT COLUMN (scrollable) ──────────────────────── */}
         <div className="col-span-3 space-y-5">
           {/* Executive Summary */}
-          <SectionCard title="Executive Summary">
-            <div className="flex gap-3">
-              <Info className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
-              <p className="text-sm text-gray-700 leading-relaxed">{summary}</p>
-            </div>
-          </SectionCard>
-
-          {/* Reasoning Timeline */}
-          <SectionCard title="How the AI Decided" description="Step-by-step reasoning from each pipeline stage">
-            <div className="pt-1">
-              {STAGE_DEFS.map((stage, i) => (
-                <ReasoningStep
-                  key={i}
-                  index={i + 1}
-                  name={stage.name}
-                  lines={stageGroups[stage.prefix] ?? []}
-                  color={stage.color}
-                  isLast={i === STAGE_DEFS.length - 1}
+          <SectionCard
+            title="Executive Summary"
+            action={<CopySummaryButton run={run} id={id} summary={summary} />}
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <QuickFact icon={CheckCircle} label="Decision" value={dc.label} />
+              <QuickFact icon={Building2} label="Vendor" value={run.extracted_data.vendor_name} />
+              <QuickFact icon={DollarSign} label="Amount" value={amountStr} />
+              <QuickFact icon={Package} label="Matched PO" value={run.matched_po ?? "No PO Found"} />
+              <div className="col-span-2">
+                <QuickFact
+                  icon={AlertTriangle}
+                  label="Flags"
+                  value={flagSubcategories.length > 0 ? flagSubcategories.join(", ") : "None"}
                 />
-              ))}
+              </div>
             </div>
           </SectionCard>
 
           {/* Line Items */}
           {run.extracted_data.line_items.length > 0 && (
             <SectionCard title="Extracted Line Items" noPadding>
-              <table className="w-full text-xs">
+              <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
                     <th className="text-left px-5 py-2.5 font-semibold text-gray-500 uppercase tracking-wider">
@@ -421,11 +406,12 @@ export default async function RunPage({
           )}
 
           {/* Pipeline Details (collapsible stages) */}
-          <SectionCard title="Pipeline Details" description="Expand each stage to see full reasoning logs">
+          <SectionCard title="How it worked?" description="Expand each stage to see full reasoning logs">
             <div className="space-y-2">
               {STAGE_DEFS.map((stage, i) => (
                 <PipelineStageCard
                   key={i}
+                  prefix={stage.prefix}
                   name={stage.name}
                   color={stage.color}
                   lines={stageGroups[stage.prefix] ?? []}
@@ -434,54 +420,56 @@ export default async function RunPage({
             </div>
           </SectionCard>
 
-          {/* Developer Mode */}
-          <details className="group bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <summary className="flex items-center gap-3 px-5 py-4 cursor-pointer list-none hover:bg-gray-50 transition-colors">
-              <Shield className="w-4 h-4 text-gray-400" />
-              <p className="text-sm font-semibold text-gray-700 flex-1">Developer Mode</p>
-              <span className="text-xs text-gray-400 mr-2">Raw pipeline data</span>
-              <ChevronDown className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="px-5 pb-5 border-t border-gray-100">
-              <div className="mt-4 grid grid-cols-2 gap-4 mb-4 text-xs">
-                <div>
-                  <p className="text-gray-400 mb-1">Model</p>
-                  <p className="font-mono font-medium text-gray-800">gpt-4o-mini</p>
+          {/* Developer Mode — hidden by default; append ?dev=1 to the URL to reveal */}
+          {devMode && (
+            <details className="group bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <summary className="flex items-center gap-3 px-5 py-4 cursor-pointer list-none hover:bg-gray-50 transition-colors">
+                <Shield className="w-4 h-4 text-gray-400" />
+                <p className="text-sm font-semibold text-gray-700 flex-1">Developer Mode</p>
+                <span className="text-sm text-gray-400 mr-2">Raw pipeline data</span>
+                <ChevronDown className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="px-5 pb-5 border-t border-gray-100">
+                <div className="mt-4 grid grid-cols-2 gap-4 mb-4 text-sm">
+                  <div>
+                    <p className="text-gray-400 mb-1">Model</p>
+                    <p className="font-mono font-medium text-gray-800">gpt-4o-mini</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 mb-1">Pipeline</p>
+                    <p className="font-mono font-medium text-gray-800">LangGraph StateGraph</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 mb-1">Run ID</p>
+                    <p className="font-mono font-medium text-gray-700 truncate">{id}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-400 mb-1">Reasoning steps</p>
+                    <p className="font-mono font-medium text-gray-800">{run.reasoning_trail.length}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-gray-400 mb-1">Pipeline</p>
-                  <p className="font-mono font-medium text-gray-800">LangGraph StateGraph</p>
-                </div>
-                <div>
-                  <p className="text-gray-400 mb-1">Run ID</p>
-                  <p className="font-mono font-medium text-gray-700 truncate">{id}</p>
-                </div>
-                <div>
-                  <p className="text-gray-400 mb-1">Reasoning steps</p>
-                  <p className="font-mono font-medium text-gray-800">{run.reasoning_trail.length}</p>
-                </div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                  Raw Extracted Data
+                </p>
+                <pre className="bg-gray-950 text-gray-300 text-xs rounded-lg p-4 overflow-x-auto leading-relaxed font-mono max-h-64 overflow-y-auto">
+                  {JSON.stringify(run.extracted_data, null, 2)}
+                </pre>
+                {run.flags_raised.length > 0 && (
+                  <>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-4">
+                      Raw Flags
+                    </p>
+                    <pre className="bg-gray-950 text-gray-300 text-xs rounded-lg p-4 overflow-x-auto leading-relaxed font-mono max-h-48 overflow-y-auto">
+                      {JSON.stringify(run.flags_raised, null, 2)}
+                    </pre>
+                  </>
+                )}
               </div>
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                Raw Extracted Data
-              </p>
-              <pre className="bg-gray-950 text-gray-300 text-xs rounded-lg p-4 overflow-x-auto leading-relaxed font-mono max-h-64 overflow-y-auto">
-                {JSON.stringify(run.extracted_data, null, 2)}
-              </pre>
-              {run.flags_raised.length > 0 && (
-                <>
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2 mt-4">
-                    Raw Flags
-                  </p>
-                  <pre className="bg-gray-950 text-gray-300 text-xs rounded-lg p-4 overflow-x-auto leading-relaxed font-mono max-h-48 overflow-y-auto">
-                    {JSON.stringify(run.flags_raised, null, 2)}
-                  </pre>
-                </>
-              )}
-            </div>
-          </details>
+            </details>
+          )}
 
           {/* Downloads */}
-          <DownloadActions run={run} id={id} summary={summary} />
+          <DownloadActions run={run} id={id} />
         </div>
       </div>
     </div>

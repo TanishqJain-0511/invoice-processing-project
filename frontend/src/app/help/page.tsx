@@ -138,7 +138,7 @@ export default function HelpPage() {
           {PIPELINE_STAGES.map((stage, i) => {
             const Icon = stage.icon;
             return (
-              <div key={i} className="flex gap-4">
+              <div key={i} id={`stage-${stage.index}`} className="flex gap-4 scroll-mt-6">
                 {/* Stage indicator */}
                 <div className="flex flex-col items-center">
                   <div className={`w-9 h-9 rounded-xl ${stage.color.bg} ${stage.color.border} border flex items-center justify-center shrink-0`}>

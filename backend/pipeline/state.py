@@ -23,7 +23,7 @@ class PipelineState(TypedDict):
     approved_vendors: list[dict]    # list of vendor records from approved_vendors.json
     invoice_history: list[dict]     # list of history records from invoice_history.json
     reference_date: str             # "YYYY-MM-DD"; use "2026-06-25" for test data
-    flag_rules: dict                # subcategory → "reject"|"flag" overrides from UI config
+    flag_rules: dict                # subcategory → "reject"|"flag"|"approve" overrides from UI config
 
     # ── Accumulated across all nodes (operator.add auto-concatenates) ─────────
     reasoning_trail: Annotated[list[str], operator.add]

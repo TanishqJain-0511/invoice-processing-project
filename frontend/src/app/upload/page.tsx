@@ -2,18 +2,18 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Upload,
   FileText,
   X,
   CheckCircle,
   Info,
-  ChevronDown,
-  ChevronUp,
   Cpu,
   ShieldCheck,
   GitMerge,
   Scale,
+  Lightbulb,
 } from "lucide-react";
 import PageHeader from "@/components/layout/PageHeader";
 import SectionCard from "@/components/shared/SectionCard";
@@ -27,6 +27,7 @@ const STAGES = [
     name: "Extraction",
     desc: "PDF parsed · GPT-4o mini structured output",
     icon: Cpu,
+    anchor: "stage-1",
     color: { ring: "border-blue-200", bg: "bg-blue-50", text: "text-blue-700", dot: "bg-blue-500", icon: "text-blue-500" },
   },
   {
@@ -34,6 +35,7 @@ const STAGES = [
     name: "Validation",
     desc: "Required fields · internal math · date sanity",
     icon: ShieldCheck,
+    anchor: "stage-2",
     color: { ring: "border-violet-200", bg: "bg-violet-50", text: "text-violet-700", dot: "bg-violet-500", icon: "text-violet-500" },
   },
   {
@@ -41,6 +43,7 @@ const STAGES = [
     name: "Matching",
     desc: "PO lookup · vendor check · tolerance · duplicates",
     icon: GitMerge,
+    anchor: "stage-3",
     color: { ring: "border-amber-200", bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500", icon: "text-amber-500" },
   },
   {
@@ -48,6 +51,7 @@ const STAGES = [
     name: "Decision",
     desc: "Final verdict · confidence · reasoning trail",
     icon: Scale,
+    anchor: "stage-4",
     color: { ring: "border-emerald-200", bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500", icon: "text-emerald-500" },
   },
 ];
@@ -374,10 +378,10 @@ export default function UploadPage() {
             onDrop={handleDrop}
             className={`relative border-2 border-dashed rounded-xl cursor-pointer transition-all duration-150 select-none ${
               dragging
-                ? "border-blue-400 bg-blue-50"
+                ? "border-blue-400 bg-blue-100"
                 : file
                 ? "border-emerald-300 bg-emerald-50"
-                : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                : "border-blue-200 bg-blue-50 hover:border-blue-300 hover:bg-blue-100"
             }`}
           >
             <input
@@ -408,8 +412,8 @@ export default function UploadPage() {
               </div>
             ) : (
               <div className="p-12 flex flex-col items-center text-center">
-                <div className="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center mb-4 transition-colors group-hover:bg-gray-200">
-                  <Upload className="w-7 h-7 text-gray-400" />
+                <div className="w-14 h-14 rounded-xl bg-blue-100 flex items-center justify-center mb-4 transition-colors">
+                  <Upload className="w-7 h-7 text-blue-500" />
                 </div>
                 <p className="text-sm font-semibold text-gray-700 mb-1">
                   Drop your invoice here
@@ -497,12 +501,16 @@ export default function UploadPage() {
         {/* Right sidebar */}
         <div className="col-span-1 space-y-4">
           {/* Pipeline preview */}
-          <SectionCard title="AI Pipeline">
+          <SectionCard title="How it works?" muted>
             <div className="space-y-0">
               {STAGES.map((stage, i) => {
                 const Icon = stage.icon;
                 return (
-                  <div key={i} className="flex items-start gap-3">
+                  <Link
+                    key={i}
+                    href={`/help#${stage.anchor}`}
+                    className="flex items-start gap-3 -mx-2 px-2 py-0.5 rounded-md hover:bg-gray-50 transition-colors group"
+                  >
                     <div className="flex flex-col items-center pt-0.5">
                       <div className={`w-7 h-7 rounded-lg ${stage.color.bg} flex items-center justify-center shrink-0`}>
                         <Icon className={`w-3.5 h-3.5 ${stage.color.icon}`} />
@@ -510,10 +518,10 @@ export default function UploadPage() {
                       {i < 3 && <div className="w-px h-5 bg-gray-100 my-1" />}
                     </div>
                     <div className="pb-1 min-w-0">
-                      <p className={`text-xs font-semibold ${stage.color.text}`}>{stage.name}</p>
+                      <p className={`text-xs font-semibold ${stage.color.text} group-hover:underline underline-offset-2`}>{stage.name}</p>
                       <p className="text-[10px] text-gray-400 leading-relaxed mt-0.5">{stage.desc}</p>
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -523,33 +531,31 @@ export default function UploadPage() {
           </SectionCard>
 
           {/* Tips */}
-          <SectionCard title="Tips">
-            <ul className="space-y-2">
-              {[
-                "Use native PDF exports for best accuracy",
-                "Scanned invoices must be clearly legible",
-                "Include PO numbers on the invoice for faster matching",
-                "Date format: YYYY-MM-DD works best",
-              ].map((tip, i) => (
-                <li key={i} className="flex items-start gap-2 text-xs text-gray-600">
-                  <div className="w-1.5 h-1.5 rounded-full bg-gray-300 mt-1.5 shrink-0" />
-                  {tip}
-                </li>
-              ))}
-            </ul>
+          <SectionCard
+            title="Tips"
+            action={
+              <div className="relative group/tip">
+                <Lightbulb className="w-4 h-4 text-amber-400 cursor-default" />
+                <div className="hidden group-hover/tip:block absolute right-0 top-6 z-20 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 leading-relaxed shadow-lg">
+                  <ul className="space-y-1.5">
+                    {[
+                      "Use native PDF exports for best accuracy",
+                      "Scanned invoices must be clearly legible",
+                      "Include PO numbers on the invoice for faster matching",
+                      "Date format: YYYY-MM-DD works best",
+                    ].map((tip, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <div className="w-1 h-1 rounded-full bg-gray-500 mt-1.5 shrink-0" />
+                        {tip}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            }
+          >
+            <p className="text-xs text-gray-400">Hover the lightbulb for tips on getting the best extraction results.</p>
           </SectionCard>
-
-          {/* Sample invoice link */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <p className="text-xs font-semibold text-blue-800 mb-1">Demo Mode</p>
-            <p className="text-[10px] text-blue-600 leading-relaxed mb-2">
-              Use any of the test PDFs from the <code className="font-mono">test_data/</code> folder
-              with reference date <span className="font-mono font-semibold">2026-06-25</span>.
-            </p>
-            <p className="text-[10px] text-blue-500">
-              Try invoice_1_happy_path_INV-3001.pdf for an approve result.
-            </p>
-          </div>
         </div>
       </div>
     </div>

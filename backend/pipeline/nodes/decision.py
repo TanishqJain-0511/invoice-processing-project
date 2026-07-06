@@ -4,12 +4,17 @@ Stage 4 — Decision
 Input:  all upstream signals accumulated in state
 Output: decision, decision_confidence, final_output (DecisionOutput)
 
-Decision precedence (phase_1.md §3 Stage 4):
-  REJECT  — if and only if: flag with subcategory
-            "Unexplained Overage — Beyond 3x Tolerance (Reject Trigger)" exists.
-            Reject is never returned without a corresponding flag object.
-  FLAG    — if any flag is in all_flags (and no reject trigger)
-  APPROVE — only if ALL of:
+Decision precedence (phase_1.md §3 Stage 4, extended by Settings → Approve escalation):
+  REJECT  — if the hardcoded trigger fires, OR any raised flag's subcategory is
+            user-configured to "reject" in flag_rules. Reject is never returned
+            without a corresponding flag object.
+  FLAG    — if any flag is in all_flags, no reject fires, and at least one of those
+            flags is NOT configured to "approve" in flag_rules.
+  APPROVE — if all_flags is empty (see conditions below), OR if every raised flag's
+            subcategory is user-configured to "approve" in flag_rules.
+            Escalation order across multiple triggered rules: Reject > Flag > Approve.
+
+  With no flags raised at all, APPROVE additionally requires ALL of:
               - match_type == "explicit"
               - no Unapproved Vendor flag
               - no Amount Discrepancy flag
@@ -81,6 +86,16 @@ def decision_node(state: PipelineState) -> dict:
         new_reasoning.append(
             f"Stage 4 (Decision): REJECT — business rules configured to reject on: [{escalated}]. "
             "See flags_raised for detail."
+        )
+
+    elif all_flags and all(flag_rules.get(f.get("subcategory")) == "approve" for f in all_flags):
+        decision = "approve"
+        flag_summary = "; ".join(
+            f"{f['category']} / {f['subcategory']}" for f in all_flags
+        )
+        new_reasoning.append(
+            f"Stage 4 (Decision): APPROVE — {len(all_flags)} flag(s) raised [{flag_summary}], "
+            "but business rules configure all of them to auto-approve. No human review required."
         )
 
     elif all_flags:

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Upload,
   Search,
@@ -17,8 +17,11 @@ import MetricCard from "@/components/shared/MetricCard";
 import DecisionBadge from "@/components/shared/DecisionBadge";
 import ConfidenceBar from "@/components/shared/ConfidenceBar";
 import EmptyState from "@/components/shared/EmptyState";
+import DateRangeFilter from "@/components/shared/DateRangeFilter";
 import { MetricCardSkeleton, TableRowSkeleton } from "@/components/shared/LoadingSkeleton";
 import { getRuns, RunSummary } from "@/lib/api";
+import { DEFAULT_DATE_RANGE, DateRangeValue, dateRangeFromParams, isWithinDateRange } from "@/lib/dateRange";
+import { FlagRules, computeEscalatedDecision } from "@/lib/decision";
 
 const FLAG_CATEGORIES = [
   "PO Matching",
@@ -69,14 +72,28 @@ function formatTime(iso: string) {
 }
 
 export default function RunsPage() {
+  return (
+    <Suspense fallback={null}>
+      <RunsPageInner />
+    </Suspense>
+  );
+}
+
+function RunsPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [decisionFilter, setDecisionFilter] = useState<"all" | "approve" | "flag" | "reject">("all");
+  const [decisionFilter, setDecisionFilter] = useState<"all" | "approve" | "flag" | "reject">(
+    (searchParams.get("status") as "all" | "approve" | "flag" | "reject") ?? "all"
+  );
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [subcategoryFilter, setSubcategoryFilter] = useState("all");
-  const [flagRules, setFlagRules] = useState<Record<string, "flag" | "reject">>({});
+  const [dateRange, setDateRange] = useState<DateRangeValue>(
+    searchParams.get("range") ? dateRangeFromParams(searchParams) : DEFAULT_DATE_RANGE
+  );
+  const [flagRules, setFlagRules] = useState<FlagRules>({});
 
   useEffect(() => {
     getRuns()
@@ -90,12 +107,16 @@ export default function RunsPage() {
   }, []);
 
   function isStale(run: RunSummary): boolean {
-    if (run.decision !== "flag") return false;
-    return run.flags_raised?.some((f) => flagRules[f.subcategory] === "reject") ?? false;
+    return computeEscalatedDecision(run.flags_raised ?? [], flagRules) !== run.decision;
   }
 
+  const dateFiltered = useMemo(
+    () => runs.filter((r) => isWithinDateRange(r.created_at, dateRange)),
+    [runs, dateRange]
+  );
+
   const filtered = useMemo(() => {
-    return runs.filter((r) => {
+    return dateFiltered.filter((r) => {
       if (query) {
         const q = query.toLowerCase();
         const name = (r.invoice_filename ?? "").toLowerCase();
@@ -109,16 +130,18 @@ export default function RunsPage() {
       }
       return true;
     });
-  }, [runs, query, decisionFilter, categoryFilter, subcategoryFilter]);
+  }, [dateFiltered, query, decisionFilter, categoryFilter, subcategoryFilter]);
 
-  const total = runs.length;
-  const approved = runs.filter((r) => r.decision === "approve").length;
-  const flagged = runs.filter((r) => r.decision === "flag").length;
-  const rejected = runs.filter((r) => r.decision === "reject").length;
-  const stale = runs.filter(isStale).length;
+  const total = dateFiltered.length;
+  const approved = dateFiltered.filter((r) => r.decision === "approve").length;
+  const flagged = dateFiltered.filter((r) => r.decision === "flag").length;
+  const rejected = dateFiltered.filter((r) => r.decision === "reject").length;
+  const stale = dateFiltered.filter(isStale).length;
+
+  const showCategoryFilter = decisionFilter === "flag" || decisionFilter === "reject";
 
   const hasActiveFilters =
-    query || decisionFilter !== "all" || categoryFilter !== "all" || subcategoryFilter !== "all";
+    query || decisionFilter !== "all" || (showCategoryFilter && categoryFilter !== "all") || (showCategoryFilter && subcategoryFilter !== "all");
 
   function clearFilters() {
     setQuery("");
@@ -126,6 +149,13 @@ export default function RunsPage() {
     setCategoryFilter("all");
     setSubcategoryFilter("all");
   }
+
+  const DECISION_LABELS: Record<"all" | "approve" | "flag" | "reject", string> = {
+    all: "All",
+    approve: "Approved",
+    flag: "Flagged",
+    reject: "Rejected",
+  };
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-5">
@@ -144,6 +174,9 @@ export default function RunsPage() {
         }
       />
 
+      {/* Date range */}
+      <DateRangeFilter value={dateRange} onChange={setDateRange} />
+
       {/* Metrics */}
       <div className="grid grid-cols-5 gap-3">
         {loading ? (
@@ -156,15 +189,16 @@ export default function RunsPage() {
           </>
         ) : (
           <>
-            <MetricCard label="Total" value={total} />
-            <MetricCard label="Approved" value={approved} color="emerald" />
-            <MetricCard label="Flagged" value={flagged} color="amber" />
-            <MetricCard label="Rejected" value={rejected} color="red" />
+            <MetricCard label="Total" value={total} tint />
+            <MetricCard label="Approved" value={approved} color="emerald" tint />
+            <MetricCard label="Flagged" value={flagged} color="amber" tint />
+            <MetricCard label="Rejected" value={rejected} color="red" tint />
             <MetricCard
               label="Needs Reprocess"
               value={stale}
               color={stale > 0 ? "amber" : "default"}
               subtext={stale > 0 ? "Rules changed" : "All current"}
+              tint={stale > 0}
             />
           </>
         )}
@@ -206,15 +240,22 @@ export default function RunsPage() {
                 return (
                   <button
                     key={d}
-                    onClick={() => setDecisionFilter(d)}
+                    onClick={() => {
+                      setDecisionFilter(d);
+                      if (d !== "flag" && d !== "reject") {
+                        setCategoryFilter("all");
+                        setSubcategoryFilter("all");
+                      }
+                    }}
                     className={`px-3 py-1 rounded text-xs font-semibold transition-colors ${color}`}
                   >
-                    {d === "all" ? "All" : d.charAt(0).toUpperCase() + d.slice(1) + "d"}
+                    {DECISION_LABELS[d]}
                   </button>
                 );
               })}
             </div>
 
+            {showCategoryFilter && (
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-gray-400" />
               <select
@@ -239,6 +280,7 @@ export default function RunsPage() {
                 </select>
               )}
             </div>
+            )}
 
             {hasActiveFilters && (
               <button
@@ -331,7 +373,7 @@ export default function RunsPage() {
                   Matched PO
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">
-                  Confidence
+                  Decision Confidence
                 </th>
                 <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Processed
@@ -375,8 +417,8 @@ export default function RunsPage() {
                       <DecisionBadge decision={run.decision} size="sm" />
                     </td>
                     <td className="px-4 py-3.5 hidden md:table-cell">
-                      <span className="text-sm text-gray-600">
-                        {run.matched_po ?? <span className="text-gray-300">—</span>}
+                      <span className={run.matched_po ? "text-sm text-gray-600" : "text-sm text-gray-400 italic"}>
+                        {run.matched_po ?? "No PO Found"}
                       </span>
                     </td>
                     <td className="px-4 py-3.5 hidden lg:table-cell w-40">
